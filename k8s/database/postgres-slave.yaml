@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-slave-pvc
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-slave
+spec:
+  ports:
+  - port: 5432
+  selector:
+    app: postgres-slave
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-slave
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-slave
+  template:
+    metadata:
+      labels:
+        app: postgres-slave
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13
+            securityContext:
+          runAsUser: 0
+        env:
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        - name: POSTGRES_PASSWORD
+          value: "password"
+        volumeMounts:
+        - name: slave-data
+          mountPath: /var/lib/postgresql/data
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          echo "⏳ Waiting for master..."
+          until pg_isready -h postgres-master -U admin; do sleep 2; done
+
+          echo "🧹 Cleaning old data..."
+          rm -rf /var/lib/postgresql/data/pgdata/*
+
+          echo "📥 Cloning data..."
+          # اینجا پسورد رو مستقیم پاس میدیم که گیر نکنه
+          PGPASSWORD=password pg_basebackup -h postgres-master -D /var/lib/postgresql/data/pgdata -U admin -v -P --wal-method=stream --write-recovery-conf
+
+          echo "🔧 Fixing permissions..."
+          chown -R postgres:postgres /var/lib/postgresql/data
+          chmod 700 /var/lib/postgresql/data/pgdata
+
+          echo "🚀 Starting Slave..."
+          su postgres -c 'docker-entrypoint.sh postgres'
+      volumes:
+      - name: slave-data
+        persistentVolumeClaim:
+          claimName: postgres-slave-pvc

@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: add-sub-deploy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: add-sub
+  template:
+    metadata:
+      labels:
+        app: add-sub
+    spec:
+      containers:
+      - name: container-add-sub
+        image: add-sub-img:v3
+        imagePullPolicy: Never  
+        ports:
+        - containerPort: 5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: add-sub-service   
+spec:
+  selector:
+    app: add-sub
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+

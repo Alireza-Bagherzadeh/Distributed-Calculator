@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paren-deploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: paren
+  template:
+    metadata:
+      labels:
+        app: paren
+    spec:
+      containers:
+      - name: container-paren
+        image: paren-img:v5
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: paren-service
+spec:
+  selector:
+    app: paren
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000

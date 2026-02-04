@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-master-pvc
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-master
+spec:
+  ports:
+  - port: 5432
+  selector:
+    app: postgres-master
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-master
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-master
+  template:
+    metadata:
+      labels:
+        app: postgres-master
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13
+          env:
+        - name: POSTGRES_USER
+          value: "admin"
+        - name: POSTGRES_PASSWORD
+          value: "password"
+        - name: POSTGRES_DB
+          value: "calculator_db"
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+
+        # این قسمت تضمین می‌کند که دسترسی‌ها همیشه باز باشند
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          # ساخت دایرکتوری دیتا اگر نباشد
+          mkdir -p /var/lib/postgresql/data/pgdata
+          chown -R postgres:postgres /var/lib/postgresql/data
+
+          # اجرای اولیه در پس‌زمینه برای ساخت کانفیگ‌ها
+          docker-entrypoint.sh postgres &
+          PID=$!
+
+          # صبر می‌کنیم تا فایل کانفیگ ساخته شود
+          sleep 10
+
+          echo "🔧 Configuring pg_hba.conf for access..."
+          # این خطوط دسترسی رپلیکیشن و کلاینت‌ها (مثل پارسر) را باز می‌کنند
+          echo "host replication all 0.0.0.0/0 trust" >> /var/lib/postgresql/data/pgdata/pg_hba.conf
+          echo "host all all 0.0.0.0/0 trust" >> /var/lib/postgresql/data/pgdata/pg_hba.conf
+
+          # منتظر می‌مانیم تا پروسه اولیه تمام شود
+          wait $PID
+
+        volumeMounts:
+        - name: master-data
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: master-data
+        persistentVolumeClaim:
+          claimName: postgres-master-pvc

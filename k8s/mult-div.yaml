@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mult-div-deploy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mult-div
+  template:
+    metadata:
+      labels:
+        app: mult-div
+    spec:
+      containers:
+      - name: container-mult-div
+        image: mult-div-img:v3
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mult-div-service 
+spec:
+  selector:
+    app: mult-div
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+
